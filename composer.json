@@ -10,13 +10,9 @@
 		"email": "will.rossiter@dna.co.nz"
 	}],
 	"require": {
-		"silverstripe/recipe-cms": "^1.0 || ^4.0",
-	    "silverstripe/vendor-plugin": "^1.0"
+		"silverstripe/recipe-cms": "^5.0",
+	    "silverstripe/vendor-plugin": "^2.0"
 	},
-    "require-dev": {
-        "phpunit/PHPUnit": "^5.7",
-        "squizlabs/php_codesniffer": "*"
-    },
     "autoload": {
         "psr-4": {
             "DNADesign\\GoogleSiteSearch\\": "src/",
