@@ -1,133 +1,161 @@
-;(function($) {
-	// Simple JavaScript Templating
-	// John Resig - http://ejohn.org/ - MIT Licensed
-	(function(){
-	  var cache = {};
+// File: vendor/dnadesign/silverstripe-googlesitesearch/javascript/googlesitesearch.js
 
-	  this.tmpl = function tmpl(str, data){
-	    // Figure out if we're getting a template, or if we need to
-	    // load the template - and be sure to cache the result.
-	    var fn = !/\W/.test(str) ?
-	      cache[str] = cache[str] ||
-	        tmpl(document.getElementById(str).innerHTML) :
+(function() {
+    // Escape special HTML characters in a string.
+    function escapeHtml(str) {
+        return str.replace(/[&<>\"\'\/]/g, function(match) {
+            const escapes = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '\"': '&quot;',
+                '\'': '&#39;',
+                '/': '&#x2F;'
+            };
+            return escapes[match];
+        });
+    }
 
-	      // Generate a reusable function that will serve as a template
-	      // generator (and which will be cached).
-	      new Function("obj",
-	        "var p=[],print=function(){p.push.apply(p,arguments);};" +
+    // A safe templating function that replaces placeholders in the form {{=key}} with escaped data.
+    // Note: This simple implementation does not support conditionals.
+    function safeTmpl(templateId, data) {
+        var template = document.getElementById(templateId).innerHTML;
+        return template.replace(/{{=([\w\.]+)}}/g, function(match, key) {
+            var keys = key.split('.');
+            var value = data;
+            for (var i = 0; i < keys.length; i++) {
+                if (value && Object.prototype.hasOwnProperty.call(value, keys[i])) {
+                    value = value[keys[i]];
+                } else {
+                    return '';
+                }
+            }
+            return escapeHtml(String(value));
+        });
+    }
 
-	        // Introduce the data as local variables using with(){}
-	        "with(obj){p.push('" +
+    // Expose our safe templating function so existing code using tmpl continues to work.
+    window.tmpl = safeTmpl;
 
-	        // Convert the template into pure JavaScript
-	        str
-	          .replace(/[\r\t\n]/g, " ")
-	          .split("{{").join("\t")
-	          .replace(/((^|}})[^\t]*)'/g, "$1\r")
-	          .replace(/\t=(.*?)}}/g, "',$1,'")
-	          .split("\t").join("');")
-	          .split("}}").join("p.push('")
-	          .split("\r").join("\\'")
-	      + "');}return p.join('');");
+    // Utility for class manipulation.
+    function addClass(el, className) {
+        if (el) el.classList.add(className);
+    }
+    function removeClass(el, className) {
+        if (el) el.classList.remove(className);
+    }
 
-	    // Provide some basic currying to the user
-	    return data ? fn( data ) : fn;
-	  };
-	})();
+    document.addEventListener('DOMContentLoaded', function() {
+        var search      = document.getElementById("g_cse"),
+            results     = document.getElementById("g_cse_results"),
+            header      = document.getElementById("g_cse_results_header"),
+            searchInput = document.getElementById("g_cse_search_form__input");
 
-	$(document).ready(function () {
-		var search = $("#g_cse"),
-			results = $("#g_cse_results"),
-			header = $("#g_cse_results_header");
+        // Listen for Enter key press in the search field.
+        if (searchInput) {
+            searchInput.addEventListener('keydown', function(event) {
+                if (event.key === "Enter") {
+                    event.preventDefault();
+                    var query = searchInput.value.trim();
+                    // Allow letters, numbers, underscore, spaces, dashes, and ampersands.
+                    if (query && /^[\w\s\-\&]+$/.test(query)) {
+                        var urlObj = new URL(window.location.href);
+                        urlObj.searchParams.set('search', query);
+                        // Reset start to display from beginning.
+                        urlObj.searchParams.set('start', 1);
+                        window.location.href = decodeURI(urlObj.toString());
+                    }
+                }
+            });
+        }
 
-		function search_error() {
-			results.removeClass('results_loading');
-			results.addClass('results_haserror');
-		}
+        function search_error() {
+            removeClass(results, 'results_loading');
+            addClass(results, 'results_haserror');
+        }
+        function search_nosearchterm() {
+            removeClass(results, 'results_loading');
+            addClass(results, 'results_hasnosearchterm');
+        }
+        function search_noresults() {
+            removeClass(results, 'results_loading');
+            addClass(results, 'results_hasnoresults');
+        }
 
-		function search_nosearchterm() {
-			results.removeClass('results_loading');
-			results.addClass('results_hasnosearchterm');
-		}
+        if (search) {
+            var currentUrl = window.location.href;
+            if (currentUrl.indexOf('search=') !== -1) {
+                var urlObj         = new URL(currentUrl),
+                    key            = search.getAttribute('data-key'),
+                    cx             = search.getAttribute('data-cx'),
+                    domain         = search.getAttribute('data-domain'),
+                    start          = urlObj.searchParams.get('start') || 1,
+                    refinement     = urlObj.searchParams.get('refinement'),
+                    searchQuery    = urlObj.searchParams.get('search'),
+                    refinementString = refinement ? '%20more:' + refinement : '';
 
-		function search_noresults() {
-			results.removeClass('results_loading');
-			results.addClass('results_hasnoresults');
-		}
+                if (searchQuery) {
+                    // Build the Google custom search API URL.
+                    var apiUrl = "https://www.googleapis.com/customsearch/v1?key=" + key +
+                        "&cx=" + cx +
+                        "&siteSearch=" + domain +
+                        "&safe=high&q=" + encodeURIComponent(searchQuery + refinementString) +
+                        "&start=" + start;
 
-		if(search.length > 0) {
-			var q = window.location.href;
+                    fetch(apiUrl)
+                        .then(function(response) {
+                            return response.json();
+                        })
+                        .then(function(data) {
+                            if (!data) {
+                                return search_error();
+                            }
+                            var list       = results.querySelector(".result_list"),
+                                refinements = results.querySelector(".result_refinements");
 
-			if(/\?Search=/.test(q)) {
-				var qs = new Uri(q),
-					key = search.data('key'),
-					cx = search.data('cx'),
-					domain = search.data('domain'),
-					start = qs.getQueryParamValue('start') || 1,
-					refinement = qs.getQueryParamValue('refinement'),
-					refinementString = refinement ? '%20more:' + qs.getQueryParamValue('refinement') : '';
+                            if (data.items && data.items.length > 0) {
+                                // Create next link if available.
+                                if (data.queries && data.queries.nextPage && data.queries.nextPage.length > 0) {
+                                    urlObj.searchParams.set('start', data.queries.nextPage[0].startIndex);
+                                    data.nextLink = decodeURI(urlObj.toString());
+                                }
+                                // Create previous link if available.
+                                if (data.queries && data.queries.previousPage && data.queries.previousPage.length > 0) {
+                                    urlObj.searchParams.set('start', data.queries.previousPage[0].startIndex);
+                                    data.previousLink = decodeURI(urlObj.toString());
+                                }
 
-				if(qs.getQueryParamValue('Search')) {
-					var url = "https://www.googleapis.com/customsearch/v1?key="+ key +"&cx="+ cx +"&siteSearch="+ domain +"&safe=high&q="+ qs.getQueryParamValue('Search') + refinementString + "&start="+ start +"&callback=?";
+                                // Create refinements if provided.
+                                if (data.context && data.context.facets && data.context.facets.length > 0) {
+                                    data.context.facets.forEach(function(obj) {
+                                        urlObj.searchParams.set('start', 0);
+                                        urlObj.searchParams.set('refinement', obj[0].label);
+                                        obj[0].link = decodeURI(urlObj.toString());
+                                        obj[0].activeClass = (refinement === obj[0].label) ? "active" : "";
+                                        refinements.insertAdjacentHTML('beforeend', tmpl("refinement_tmpl", obj[0]));
+                                    });
+                                }
 
-					$.support.cors = true;
-					$.ajaxSetup({ cache: false });
+                                removeClass(results, 'results_loading');
+                                results.insertAdjacentHTML('beforebegin', tmpl("pre_result_tmpl", data));
 
-					$.getJSON(url, function(data) {
-						if(!data) {
-							return search_error();
-						}
-
-						var list = $(".result_list", results),
-						    refinements = $(".result_refinements", results);
-
-						if(typeof data.items !== "undefined" && data.items.length > 0) {
-							// if there is a next page, create a link for the next page.
-							if(typeof data.queries.nextPage !== "undefined" && data.queries.nextPage.length > 0) {
-								qs.replaceQueryParam('start', data.queries.nextPage[0].startIndex);
-								data.nextLink = decodeURI(qs.toString());
-							}
-
-							// if there is a previous page, create a link for the previous page
-							if(typeof data.queries.previousPage !== "undefined" && data.queries.previousPage.length > 0) {
-								qs.replaceQueryParam('start', data.queries.previousPage[0].startIndex);
-								data.previousLink = decodeURI(qs.toString());
-							}
-
-							// if there are refinements, create links for them
-							if(typeof data.context.facets !== "undefined" && data.context.facets.length > 0) {
-
-    							$.each(data.context.facets, function(i, obj) {
-        							qs.replaceQueryParam('start', 0);
-        							qs.replaceQueryParam('refinement', obj[0].label);
-        							obj[0].link = decodeURI(qs.toString());
-        							obj[0].activeClass = (refinement == obj[0].label) ? "active" : "";
-    								refinements.append(tmpl("refinement_tmpl", obj[0]));
-    							});
-							}
-
-							results.removeClass('results_loading')
-							results.before(tmpl("pre_result_tmpl", data));
-
-							$.each(data.items, function(i, obj) {
-								list.append(tmpl("result_tmpl", obj));
-							});
-
-							results.after(tmpl("post_result_tmpl", data));
-						}
-						else {
-							search_noresults();
-						}
-
-
-					});
-				}
-				else {
-					search_error();
-				}
-			} else {
-    			search_nosearchterm();
-			}
-		}
-	});
-})(jQuery);
+                                data.items.forEach(function(item) {
+                                    list.insertAdjacentHTML('beforeend', tmpl("result_tmpl", item));
+                                });
+                                results.insertAdjacentHTML('afterend', tmpl("post_result_tmpl", data));
+                            } else {
+                                search_noresults();
+                            }
+                        })
+                        .catch(function(error) {
+                            search_error();
+                        });
+                } else {
+                    search_error();
+                }
+            } else {
+                search_nosearchterm();
+            }
+        }
+    });
+})();

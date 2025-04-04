@@ -3,6 +3,15 @@
 		<h1>$Title / <strong>$GoogleSiteSearchText</strong></h1>
 	</div>
 
+    <div id="g_cse_search_form">
+        <input type="text" id="g_cse_search_form__input"
+               name="g_cse_search_input"
+               placeholder="Search $Title"
+               value="$SearchTerm"
+               aria-label="Search $Title"
+               class="g_cse_search_input"
+               />
+    </div>
 	<div id="g_cse_results" class="results_loading">
 		<ul class="result_refinements"></ul>
 		<ul class="result_list"></ul>

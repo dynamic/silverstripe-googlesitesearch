@@ -17,7 +17,7 @@ class GoogleSiteSearchPageController extends \PageController
     {
         parent::init();
 
-        Requirements::javascript('silverstripe/admin: thirdparty/jquery/jquery.js');
+        Requirements::javascript('//code.jquery.com/jquery-3.7.1.min.js');
         Requirements::javascript('dnadesign/silverstripe-googlesitesearch: javascript/uri.js');
         Requirements::javascript('dnadesign/silverstripe-googlesitesearch: javascript/googlesitesearch.js');
 
