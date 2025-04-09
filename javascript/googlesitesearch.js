@@ -1,23 +1,22 @@
 // File: vendor/dnadesign/silverstripe-googlesitesearch/javascript/googlesitesearch.js
 
 (function() {
-    // Escape special HTML characters in a string.
     function escapeHtml(str) {
-        return str.replace(/[&<>\"\'\/]/g, function(match) {
+        return str.replace(/[&<>\"'\/]/g, function(match) {
             const escapes = {
                 '&': '&amp;',
                 '<': '&lt;',
                 '>': '&gt;',
-                '\"': '&quot;',
-                '\'': '&#39;',
+                '"': '&quot;',
+                "'": '&#39;',
                 '/': '&#x2F;'
             };
             return escapes[match];
         });
     }
 
-    // A safe templating function that replaces placeholders in the form {{=key}} with escaped data.
-    // Note: This simple implementation does not support conditionals.
+    // The safeTmpl function retrieves the template content and replaces placeholders.
+    // It returns raw HTML for the 'htmlSnippet' key, while escaping all other values.
     function safeTmpl(templateId, data) {
         var template = document.getElementById(templateId).innerHTML;
         return template.replace(/{{=([\w\.]+)}}/g, function(match, key) {
@@ -30,14 +29,16 @@
                     return '';
                 }
             }
+            if (key === 'htmlSnippet') {
+                // Return the raw HTML so that tags are rendered instead of displayed
+                return String(value);
+            }
             return escapeHtml(String(value));
         });
     }
 
-    // Expose our safe templating function so existing code using tmpl continues to work.
     window.tmpl = safeTmpl;
 
-    // Utility for class manipulation.
     function addClass(el, className) {
         if (el) el.classList.add(className);
     }
@@ -51,17 +52,14 @@
             header      = document.getElementById("g_cse_results_header"),
             searchInput = document.getElementById("g_cse_search_form__input");
 
-        // Listen for Enter key press in the search field.
         if (searchInput) {
             searchInput.addEventListener('keydown', function(event) {
                 if (event.key === "Enter") {
                     event.preventDefault();
                     var query = searchInput.value.trim();
-                    // Allow letters, numbers, underscore, spaces, dashes, and ampersands.
                     if (query && /^[\w\s\-\&]+$/.test(query)) {
                         var urlObj = new URL(window.location.href);
                         urlObj.searchParams.set('search', query);
-                        // Reset start to display from beginning.
                         urlObj.searchParams.set('start', 1);
                         window.location.href = decodeURI(urlObj.toString());
                     }
@@ -92,14 +90,13 @@
                     start          = urlObj.searchParams.get('start') || 1,
                     refinement     = urlObj.searchParams.get('refinement'),
                     searchQuery    = urlObj.searchParams.get('search'),
-                    refinementString = refinement ? '%20more:' + refinement : '';
+                    refinementStr  = refinement ? '%20more:' + refinement : '';
 
                 if (searchQuery) {
-                    // Build the Google custom search API URL.
                     var apiUrl = "https://www.googleapis.com/customsearch/v1?key=" + key +
                         "&cx=" + cx +
                         "&siteSearch=" + domain +
-                        "&safe=high&q=" + encodeURIComponent(searchQuery + refinementString) +
+                        "&safe=high&q=" + encodeURIComponent(searchQuery + refinementStr) +
                         "&start=" + start;
 
                     fetch(apiUrl)
@@ -110,22 +107,22 @@
                             if (!data) {
                                 return search_error();
                             }
-                            var list       = results.querySelector(".result_list"),
+
+                            var list        = results.querySelector(".result_list"),
                                 refinements = results.querySelector(".result_refinements");
 
                             if (data.items && data.items.length > 0) {
-                                // Create next link if available.
+
                                 if (data.queries && data.queries.nextPage && data.queries.nextPage.length > 0) {
                                     urlObj.searchParams.set('start', data.queries.nextPage[0].startIndex);
                                     data.nextLink = decodeURI(urlObj.toString());
                                 }
-                                // Create previous link if available.
+
                                 if (data.queries && data.queries.previousPage && data.queries.previousPage.length > 0) {
                                     urlObj.searchParams.set('start', data.queries.previousPage[0].startIndex);
                                     data.previousLink = decodeURI(urlObj.toString());
                                 }
 
-                                // Create refinements if provided.
                                 if (data.context && data.context.facets && data.context.facets.length > 0) {
                                     data.context.facets.forEach(function(obj) {
                                         urlObj.searchParams.set('start', 0);
@@ -142,7 +139,13 @@
                                 data.items.forEach(function(item) {
                                     list.insertAdjacentHTML('beforeend', tmpl("result_tmpl", item));
                                 });
-                                results.insertAdjacentHTML('afterend', tmpl("post_result_tmpl", data));
+
+                                if (data.previousLink) {
+                                    results.insertAdjacentHTML('afterend', tmpl("previous_link_tmpl", data));
+                                }
+                                if (data.nextLink) {
+                                    results.insertAdjacentHTML('afterend', tmpl("next_link_tmpl", data));
+                                }
                             } else {
                                 search_noresults();
                             }
