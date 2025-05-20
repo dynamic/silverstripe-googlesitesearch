@@ -23,8 +23,9 @@ class GoogleSiteSearchPageController extends \PageController
 
         Requirements::css('dnadesign/silverstripe-googlesitesearch: css/googlesitesearch.css');
 
-        if (isset($_GET['Search'])) {
-            $sanitized_search_text = filter_var($_GET['Search'], FILTER_SANITIZE_STRING);
+        $search = $this->getRequest()->getVar('search');
+        if ($search) {
+            $sanitized_search_text = htmlspecialchars($search, ENT_QUOTES, 'UTF-8');
             $this->GoogleSiteSearchText = DBField::create_field(
                 'HTMLText',
                 $sanitized_search_text
